@@ -38,7 +38,6 @@ class ListingResponceSchema(BaseModel):
 
 
 class ListingUpdateSchema(BaseModel):
-    id: int
     name: str = Field(min_length=4, max_length=30)
     description: str = Field(min_length=1, max_length=200) 
     price: float = Field(gt=0)

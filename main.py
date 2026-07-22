@@ -2,9 +2,13 @@ from fastapi import FastAPI
 import uvicorn
 from database import setup_database
 import models 
+from routers.listings import router as listings_router
+from routers.auth import router as auth_router
 
 app = FastAPI()
 
+app.include_router(listings_router)
+app.include_router(auth_router)
 
 @app.on_event("startup")
 async def startup():
