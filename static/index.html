@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>stay — book places to live</title>
+<style>
+  :root{
+    --coral:#FF385C;
+    --coral-dark:#E00B41;
+    --ink:#222222;
+    --muted:#717171;
+    --line:#DDDDDD;
+    --line-soft:#EBEBEB;
+    --bg:#FFFFFF;
+    --shadow:0 6px 20px rgba(0,0,0,.08);
+    --radius:12px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    color:var(--ink);
+    background:var(--bg);
+    -webkit-font-smoothing:antialiased;
+  }
+  button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+  input,textarea{font-family:inherit;font-size:15px}
+
+  /* ---------- header ---------- */
+  header{
+    position:sticky;top:0;z-index:50;
+    background:rgba(255,255,255,.92);
+    backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line-soft);
+  }
+  .bar{
+    max-width:1180px;margin:0 auto;padding:16px 24px;
+    display:flex;align-items:center;gap:20px;
+  }
+  .logo{font-size:22px;font-weight:800;letter-spacing:-.5px;color:var(--coral)}
+  .logo span{color:var(--ink)}
+  .spacer{flex:1}
+  .whoami{
+    display:flex;align-items:center;gap:10px;
+    border:1px solid var(--line);border-radius:999px;
+    padding:6px 8px 6px 16px;font-size:14px;
+  }
+  .avatar{
+    width:30px;height:30px;border-radius:50%;
+    background:var(--ink);color:#fff;
+    display:grid;place-items:center;font-size:13px;font-weight:600;
+  }
+  .btn{border-radius:8px;padding:11px 18px;font-size:15px;font-weight:600;transition:.15s}
+  .btn-primary{background:var(--coral);color:#fff}
+  .btn-primary:hover{background:var(--coral-dark)}
+  .btn-ghost{border:1px solid var(--line)}
+  .btn-ghost:hover{background:#F7F7F7}
+  .btn-quiet{color:var(--muted);font-weight:500;text-decoration:underline}
+  .btn-quiet:hover{color:var(--ink)}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .btn-sm{padding:8px 14px;font-size:14px}
+
+  /* ---------- tabs ---------- */
+  nav.tabs{
+    max-width:1180px;margin:0 auto;padding:0 24px;
+    display:flex;gap:28px;overflow-x:auto;
+  }
+  nav.tabs button{
+    padding:16px 0;font-size:15px;font-weight:500;color:var(--muted);
+    border-bottom:2px solid transparent;white-space:nowrap;
+  }
+  nav.tabs button:hover{color:var(--ink)}
+  nav.tabs button.on{color:var(--ink);font-weight:600;border-bottom-color:var(--ink)}
+
+  /* ---------- layout ---------- */
+  main{max-width:1180px;margin:0 auto;padding:32px 24px 80px}
+  .head{display:flex;align-items:flex-end;gap:16px;margin-bottom:24px}
+  .head h1{font-size:26px;font-weight:700;letter-spacing:-.4px}
+  .head p{color:var(--muted);font-size:14px;margin-top:4px}
+
+  .grid{display:grid;gap:28px 20px;grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
+
+  /* ---------- listing card ---------- */
+  .card .photo{
+    aspect-ratio:20/19;border-radius:var(--radius);overflow:hidden;
+    position:relative;margin-bottom:12px;
+  }
+  .card .photo i{position:absolute;inset:0;transition:transform .4s ease}
+  .card:hover .photo i{transform:scale(1.05)}
+  .card .price-tag{
+    position:absolute;left:12px;bottom:12px;
+    background:rgba(255,255,255,.95);border-radius:999px;
+    padding:6px 12px;font-size:13px;font-weight:600;
+  }
+  .card h3{font-size:15px;font-weight:600;margin-bottom:2px}
+  .card .owner{font-size:14px;color:var(--muted)}
+  .card .desc{
+    font-size:14px;color:var(--muted);margin:6px 0 10px;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  }
+  .card .actions{display:flex;gap:8px;margin-top:10px}
+
+  /* ---------- booking row ---------- */
+  .row{
+    display:flex;gap:16px;align-items:center;
+    border:1px solid var(--line-soft);border-radius:var(--radius);
+    padding:14px;margin-bottom:12px;
+  }
+  .row .thumb{width:76px;height:76px;border-radius:8px;flex-shrink:0;overflow:hidden;position:relative}
+  .row .thumb i{position:absolute;inset:0}
+  .row .info{flex:1;min-width:0}
+  .row .info h3{font-size:15px;font-weight:600;margin-bottom:3px}
+  .row .info .meta{font-size:14px;color:var(--muted)}
+  .row .side{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+
+  .pill{display:inline-block;border-radius:999px;padding:4px 11px;font-size:12px;font-weight:600;letter-spacing:.2px}
+  .pill.pending{background:#FFF4E5;color:#B26A00}
+  .pill.confirmed{background:#E8F5EC;color:#1B7A3E}
+  .pill.rejected{background:#FDECEC;color:#B3261E}
+  .pill.cancelled{background:#F1F1F1;color:#717171}
+
+  /* ---------- states ---------- */
+  .empty{border:1px solid var(--line-soft);border-radius:var(--radius);padding:56px 24px;text-align:center}
+  .empty h3{font-size:17px;font-weight:600;margin-bottom:6px}
+  .empty p{color:var(--muted);font-size:14px;margin-bottom:18px}
+  .skeleton{border-radius:var(--radius);background:#F1F1F1;animation:pulse 1.4s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
+
+  /* ---------- modal ---------- */
+  .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);display:grid;place-items:center;padding:20px;z-index:100}
+  .modal{
+    background:#fff;border-radius:16px;box-shadow:var(--shadow);
+    width:100%;max-width:440px;max-height:90vh;overflow-y:auto;
+    animation:pop .18s ease-out;
+  }
+  @keyframes pop{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .modal .m-head{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--line-soft)}
+  .modal .m-head h2{font-size:16px;font-weight:600;flex:1;text-align:center}
+  .modal .m-body{padding:22px 24px}
+  .modal .m-foot{padding:0 24px 24px}
+  .x{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-size:18px}
+  .x:hover{background:#F1F1F1}
+
+  label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px}
+  .field{margin-bottom:16px}
+  .field input,.field textarea{
+    width:100%;border:1px solid var(--line);border-radius:8px;
+    padding:12px 14px;outline:none;transition:.15s;
+  }
+  .field input:focus,.field textarea:focus{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
+  .field textarea{resize:vertical;min-height:88px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .switch{text-align:center;font-size:14px;color:var(--muted);margin-top:14px}
+  .full{width:100%;display:block;text-align:center}
+
+  .summary{border-top:1px solid var(--line-soft);margin-top:6px;padding-top:14px;font-size:14px;display:flex;justify-content:space-between}
+  .summary strong{font-size:16px}
+
+  /* ---------- toast ---------- */
+  #toasts{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:200;display:flex;flex-direction:column;gap:8px;align-items:center}
+  .toast{
+    background:var(--ink);color:#fff;border-radius:10px;
+    padding:13px 18px;font-size:14px;max-width:400px;
+    box-shadow:var(--shadow);animation:pop .18s ease-out;
+  }
+  .toast.bad{background:#B3261E}
+  .toast.good{background:#1B7A3E}
+
+  @media(max-width:640px){
+    .bar{padding:12px 16px}
+    main{padding:24px 16px 60px}
+    nav.tabs{padding:0 16px}
+    .row{flex-wrap:wrap}
+    .row .side{width:100%;align-items:flex-start;flex-direction:row;justify-content:space-between}
+  }
+  @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+  :focus-visible{outline:2px solid var(--coral);outline-offset:2px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="bar">
+    <div class="logo">stay<span>.</span></div>
+    <div class="spacer"></div>
+    <div id="authArea"></div>
+  </div>
+  <nav class="tabs" id="tabs"></nav>
+</header>
+
+<main id="view"></main>
+<div id="modalHost"></div>
+<div id="toasts"></div>
+
+<script>
+const API = location.port === '8000'
+  ? ''                       // page is served by the same server — use relative paths
+  : 'http://127.0.0.1:8000'; // opened some other way — hit the API directly (needs CORS)
+
+const state = {
+  token: localStorage.getItem('stay_token') || null,
+  me: null,
+  tab: 'explore',
+  listings: [],
+  tripsGuest: [],
+  tripsOwner: [],
+  loading: false,
+};
+
+/* ============ api ============ */
+async function api(path, {method='GET', body, auth=true} = {}) {
+  const headers = {};
+  if (body) headers['Content-Type'] = 'application/json';
+  if (auth && state.token) headers['Authorization'] = 'Bearer ' + state.token;
+
+  const res = await fetch(API + path, {
+    method, headers,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  if (res.status === 204) return null;
+
+  const text = await res.text();
+  let data = null;
+  if (text) { try { data = JSON.parse(text); } catch { data = text; } }
+
+  if (!res.ok) {
+    if (res.status === 401 && auth) logout(true);
+    throw new Error(readError(data, res.status));
+  }
+  return data;
+}
+
+function readError(data, status) {
+  const d = data && data.detail;
+  if (typeof d === 'string') return d;
+  if (Array.isArray(d)) {
+    return d.map(e => `${(e.loc || []).slice(1).join('.')}: ${e.msg}`).join('; ');
+  }
+  return 'Something went wrong (status ' + status + ')';
+}
+
+/* ============ helpers ============ */
+const $ = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; };
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function toast(msg, kind='') {
+  const el = $(`<div class="toast ${kind}">${esc(msg)}</div>`);
+  document.getElementById('toasts').append(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+// no photos in the API — build a stable gradient from the listing id instead
+function shade(id) {
+  const hue = (Number(id) * 47) % 360;
+  return `background:linear-gradient(140deg,hsl(${hue} 62% 72%),hsl(${(hue+40)%360} 58% 55%))`;
+}
+
+const money = (n) => '$' + new Intl.NumberFormat('en-US').format(Math.round(n));
+
+function fmtDate(iso) {
+  return new Date(iso + 'T00:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric'});
+}
+
+function nights(a, b) {
+  return Math.round((new Date(b) - new Date(a)) / 86400000);
+}
+
+const STATUS_EN = {pending:'Awaiting host', confirmed:'Confirmed', rejected:'Declined', cancelled:'Cancelled'};
+
+/* ============ auth ============ */
+async function loadMe() {
+  if (!state.token) { state.me = null; return; }
+  try { state.me = await api('/auth/me'); }
+  catch { state.me = null; }
+}
+
+function logout(silent) {
+  state.token = null; state.me = null;
+  localStorage.removeItem('stay_token');
+  if (!silent) toast('Signed out');
+  state.tab = 'explore';
+  render();
+}
+
+/* ============ modal ============ */
+function closeModal() { document.getElementById('modalHost').innerHTML = ''; }
+
+function openModal(title, bodyHTML, footHTML) {
+  const host = document.getElementById('modalHost');
+  host.innerHTML = '';
+  const back = $(`
+    <div class="backdrop">
+      <div class="modal" role="dialog" aria-modal="true">
+        <div class="m-head">
+          <button class="x" data-close aria-label="Close">✕</button>
+          <h2>${esc(title)}</h2>
+          <span style="width:32px"></span>
+        </div>
+        <div class="m-body">${bodyHTML}</div>
+        ${footHTML ? `<div class="m-foot">${footHTML}</div>` : ''}
+      </div>
+    </div>`);
+  back.addEventListener('click', e => { if (e.target === back || e.target.closest('[data-close]')) closeModal(); });
+  host.append(back);
+  const first = back.querySelector('input,textarea');
+  if (first) first.focus();
+  return back;
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+/* ============ auth modal ============ */
+function authModal(mode = 'login') {
+  const isLogin = mode === 'login';
+  const m = openModal(isLogin ? 'Log in' : 'Sign up', `
+    ${isLogin ? '' : `
+    <div class="field">
+      <label for="f-nick">Display name</label>
+      <input id="f-nick" placeholder="What guests will see" autocomplete="nickname">
+    </div>`}
+    <div class="field">
+      <label for="f-email">Email</label>
+      <input id="f-email" type="email" placeholder="you@mail.com" autocomplete="email">
+    </div>
+    <div class="field">
+      <label for="f-pass">Password</label>
+      <input id="f-pass" type="password" placeholder="At least 5 characters" autocomplete="${isLogin ? 'current-password' : 'new-password'}">
+    </div>
+    <div class="switch">
+      ${isLogin ? "Don't have an account?" : 'Already registered?'}
+      <button class="btn-quiet" id="f-swap">${isLogin ? 'Sign up' : 'Log in'}</button>
+    </div>
+  `, `<button class="btn btn-primary full" id="f-go">${isLogin ? 'Log in' : 'Create account'}</button>`);
+
+  m.querySelector('#f-swap').onclick = () => authModal(isLogin ? 'register' : 'login');
+
+  const go = m.querySelector('#f-go');
+  go.onclick = async () => {
+    const email = m.querySelector('#f-email').value.trim();
+    const password = m.querySelector('#f-pass').value;
+    const nick = isLogin ? '-' : m.querySelector('#f-nick').value.trim();
+
+    if (!email || !password) return toast('Enter your email and password', 'bad');
+    if (password.length < 5) return toast('Password must be at least 5 characters', 'bad');
+    if (!isLogin && !nick) return toast('Enter a display name', 'bad');
+
+    go.disabled = true; go.textContent = 'One moment…';
+    try {
+      if (!isLogin) {
+        await api('/auth/registration', {method:'POST', auth:false, body:{nick, email, password}});
+      }
+      const res = await api('/auth/login', {method:'POST', auth:false, body:{nick, email, password}});
+      const token = res['access token'] || res['access_token'] || res.token;
+      if (!token) throw new Error('The server did not return a token');
+      state.token = token;
+      localStorage.setItem('stay_token', token);
+      await loadMe();
+      closeModal();
+      toast(isLogin ? `Welcome back, ${state.me?.nick || ''}` : 'Account created', 'good');
+      render();
+    } catch (e) {
+      toast(e.message, 'bad');
+      go.disabled = false; go.textContent = isLogin ? 'Log in' : 'Create account';
+    }
+  };
+}
+
+function requireAuth() {
+  if (!state.me) { authModal('login'); return false; }
+  return true;
+}
+
+/* ============ listing modal ============ */
+function listingModal(existing) {
+  const edit = !!existing;
+  const m = openModal(edit ? 'Edit listing' : 'New listing', `
+    <div class="field">
+      <label for="l-name">Title</label>
+      <input id="l-name" placeholder="Studio by the sea" value="${esc(existing?.name || '')}">
+    </div>
+    <div class="field">
+      <label for="l-desc">Description</label>
+      <textarea id="l-desc" placeholder="What a guest should know">${esc(existing?.description || '')}</textarea>
+    </div>
+    <div class="field">
+      <label for="l-price">Price per night</label>
+      <input id="l-price" type="number" min="1" step="1" placeholder="120" value="${existing?.price ?? ''}">
+    </div>
+  `, `<button class="btn btn-primary full" id="l-go">${edit ? 'Save changes' : 'Publish listing'}</button>`);
+
+  const go = m.querySelector('#l-go');
+  go.onclick = async () => {
+    const name = m.querySelector('#l-name').value.trim();
+    const description = m.querySelector('#l-desc').value.trim();
+    const price = Number(m.querySelector('#l-price').value);
+
+    if (name.length < 4) return toast('Title must be at least 4 characters', 'bad');
+    if (!description) return toast('Add a description', 'bad');
+    if (!price || price <= 0) return toast('Price must be greater than zero', 'bad');
+
+    go.disabled = true; go.textContent = 'One moment…';
+    try {
+      if (edit) await api(`/listings/${existing.id}`, {method:'PATCH', body:{name, description, price}});
+      else      await api('/listings/', {method:'POST', body:{name, description, price}});
+      closeModal();
+      toast(edit ? 'Listing updated' : 'Listing published', 'good');
+      await refresh();
+    } catch (e) {
+      toast(e.message, 'bad');
+      go.disabled = false; go.textContent = edit ? 'Save changes' : 'Publish listing';
+    }
+  };
+}
+
+/* ============ booking modal ============ */
+function bookingModal(listing) {
+  const today = new Date().toISOString().slice(0, 10);
+  const m = openModal(listing.name, `
+    <div class="two">
+      <div class="field">
+        <label for="b-in">Check in</label>
+        <input id="b-in" type="date" min="${today}">
+      </div>
+      <div class="field">
+        <label for="b-out">Check out</label>
+        <input id="b-out" type="date" min="${today}">
+      </div>
+    </div>
+    <div class="summary" id="b-sum"><span>Pick your dates</span><strong>—</strong></div>
+  `, `<button class="btn btn-primary full" id="b-go">Request to book</button>`);
+
+  const inp = m.querySelector('#b-in'), out = m.querySelector('#b-out'), sum = m.querySelector('#b-sum');
+
+  const recalc = () => {
+    const n = (inp.value && out.value) ? nights(inp.value, out.value) : 0;
+    sum.innerHTML = n > 0
+      ? `<span>${money(listing.price)} × ${n} night${n > 1 ? 's' : ''}</span><strong>${money(listing.price * n)}</strong>`
+      : `<span>Pick your dates</span><strong>—</strong>`;
+  };
+  inp.oninput = () => { out.min = inp.value || today; recalc(); };
+  out.oninput = recalc;
+
+  const go = m.querySelector('#b-go');
+  go.onclick = async () => {
+    if (!inp.value || !out.value) return toast('Pick a check-in and check-out date', 'bad');
+    if (nights(inp.value, out.value) < 1) return toast('Check-out must be after check-in', 'bad');
+
+    go.disabled = true; go.textContent = 'One moment…';
+    try {
+      await api('/bookings/', {method:'POST', body:{
+        listing_id: listing.id, check_in: inp.value, check_out: out.value,
+      }});
+      closeModal();
+      toast('Request sent — waiting on the host', 'good');
+      state.tab = 'trips';
+      await refresh();
+    } catch (e) {
+      toast(e.message, 'bad');
+      go.disabled = false; go.textContent = 'Request to book';
+    }
+  };
+}
+
+/* ============ actions ============ */
+async function act(fn, okMsg) {
+  try { await fn(); toast(okMsg, 'good'); await refresh(); }
+  catch (e) { toast(e.message, 'bad'); }
+}
+
+const confirmBooking = (id) => act(() => api(`/bookings/${id}/confirm`, {method:'PATCH'}), 'Booking confirmed');
+const rejectBooking  = (id) => act(() => api(`/bookings/${id}/reject`,  {method:'PATCH'}), 'Booking declined');
+const cancelBooking  = (id) => act(() => api(`/bookings/${id}/cancel`,  {method:'PATCH'}), 'Booking cancelled');
+const deleteListing  = (id) => {
+  if (!window.confirm('Delete this listing? This cannot be undone.')) return;
+  return act(() => api(`/listings/${id}`, {method:'DELETE'}), 'Listing deleted');
+};
+
+/* ============ data ============ */
+async function refresh() {
+  state.loading = true; render();
+  try {
+    const jobs = [api('/listings/', {auth:false}).then(r => state.listings = r || [])];
+    if (state.me) {
+      jobs.push(api('/bookings/as-guest').then(r => state.tripsGuest = r || []));
+      jobs.push(api('/bookings/as-owner').then(r => state.tripsOwner = r || []));
+    } else {
+      state.tripsGuest = []; state.tripsOwner = [];
+    }
+    await Promise.all(jobs);
+  } catch (e) {
+    toast(e.message, 'bad');
+  } finally {
+    state.loading = false; render();
+  }
+}
+
+/* ============ render ============ */
+function renderAuthArea() {
+  const el = document.getElementById('authArea');
+  if (state.me) {
+    el.innerHTML = `
+      <div class="whoami">
+        <span>${esc(state.me.nick)}</span>
+        <span class="avatar">${esc((state.me.nick || '?')[0].toUpperCase())}</span>
+        <button class="btn btn-quiet btn-sm" id="out">Log out</button>
+      </div>`;
+    el.querySelector('#out').onclick = () => logout();
+  } else {
+    el.innerHTML = `<button class="btn btn-primary btn-sm" id="in">Log in</button>`;
+    el.querySelector('#in').onclick = () => authModal('login');
+  }
+}
+
+function renderTabs() {
+  const pending = state.tripsOwner.filter(b => b.status === 'pending').length;
+  const tabs = [
+    ['explore', 'Explore stays'],
+    ['mine',    'Your listings'],
+    ['trips',   `Your trips${state.tripsGuest.length ? ' · ' + state.tripsGuest.length : ''}`],
+    ['inbox',   `Requests${pending ? ' · ' + pending : ''}`],
+  ];
+  const nav = document.getElementById('tabs');
+  nav.innerHTML = tabs.map(([k, label]) =>
+    `<button data-tab="${k}" class="${state.tab === k ? 'on' : ''}">${esc(label)}</button>`).join('');
+  nav.querySelectorAll('button').forEach(b => b.onclick = () => {
+    const k = b.dataset.tab;
+    if (k !== 'explore' && !requireAuth()) return;
+    state.tab = k; render();
+  });
+}
+
+function skeletonGrid() {
+  return `<div class="grid">${'<div><div class="skeleton" style="aspect-ratio:20/19"></div><div class="skeleton" style="height:14px;margin-top:12px;width:70%"></div><div class="skeleton" style="height:14px;margin-top:8px;width:45%"></div></div>'.repeat(8)}</div>`;
+}
+
+function listingCard(l) {
+  const mine = state.me && l.owner.id === state.me.id;
+  return `
+    <article class="card" data-listing="${l.id}">
+      <div class="photo"><i style="${shade(l.id)}"></i>
+        <span class="price-tag">${money(l.price)} / night</span>
+      </div>
+      <h3>${esc(l.name)}</h3>
+      <div class="owner">${mine ? 'Your listing' : 'Hosted by ' + esc(l.owner.nick)}</div>
+      <p class="desc">${esc(l.description)}</p>
+      <div class="actions">
+        ${mine
+          ? `<button class="btn btn-ghost btn-sm" data-edit="${l.id}">Edit</button>
+             <button class="btn btn-ghost btn-sm" data-del="${l.id}">Delete</button>`
+          : `<button class="btn btn-primary btn-sm" data-book="${l.id}">Book</button>`}
+      </div>
+    </article>`;
+}
+
+function bookingRow(b, role) {
+  const canCancel = role === 'guest' && (b.status === 'pending' || b.status === 'confirmed');
+  const canDecide = role === 'owner' && b.status === 'pending';
+  const who = role === 'owner' ? 'Guest — ' + esc(b.guest.nick) : 'Hosted by ' + esc(b.listing.name);
+  const n = nights(b.check_in, b.check_out);
+  return `
+    <div class="row">
+      <div class="thumb"><i style="${shade(b.listing.id)}"></i></div>
+      <div class="info">
+        <h3>${esc(b.listing.name)}</h3>
+        <div class="meta">${fmtDate(b.check_in)} – ${fmtDate(b.check_out)} · ${n} night${n > 1 ? 's' : ''} · ${money(b.listing.price * n)}</div>
+        <div class="meta">${who}</div>
+      </div>
+      <div class="side">
+        <span class="pill ${b.status}">${STATUS_EN[b.status] || b.status}</span>
+        <div style="display:flex;gap:8px">
+          ${canDecide ? `<button class="btn btn-primary btn-sm" data-confirm="${b.id}">Confirm</button>
+                         <button class="btn btn-ghost btn-sm" data-reject="${b.id}">Decline</button>` : ''}
+          ${canCancel ? `<button class="btn btn-ghost btn-sm" data-cancel="${b.id}">Cancel</button>` : ''}
+        </div>
+      </div>
+    </div>`;
+}
+
+function render() {
+  renderAuthArea();
+  renderTabs();
+  const view = document.getElementById('view');
+
+  if (state.tab === 'explore') {
+    view.innerHTML = `
+      <div class="head">
+        <div>
+          <h1>Places to stay</h1>
+          <p>${state.listings.length ? state.listings.length + ' places from hosts' : 'Available places will show up here'}</p>
+        </div>
+      </div>
+      ${state.loading && !state.listings.length ? skeletonGrid()
+        : state.listings.length
+          ? `<div class="grid">${state.listings.map(listingCard).join('')}</div>`
+          : `<div class="empty"><h3>Nothing here yet</h3><p>No one has listed a place. Be the first.</p>
+             <button class="btn btn-primary" data-new>Add a listing</button></div>`}
+    `;
+  }
+
+  if (state.tab === 'mine') {
+    const mine = state.listings.filter(l => state.me && l.owner.id === state.me.id);
+    view.innerHTML = `
+      <div class="head">
+        <div><h1>Your listings</h1><p>Places you host</p></div>
+        <div class="spacer"></div>
+        <button class="btn btn-primary" data-new>Add a listing</button>
+      </div>
+      ${mine.length
+        ? `<div class="grid">${mine.map(listingCard).join('')}</div>`
+        : `<div class="empty"><h3>You aren't hosting yet</h3><p>Add a place and guests will see it on the home page.</p>
+           <button class="btn btn-primary" data-new>Add a listing</button></div>`}
+    `;
+  }
+
+  if (state.tab === 'trips') {
+    view.innerHTML = `
+      <div class="head"><div><h1>Your trips</h1><p>Requests you sent to hosts</p></div></div>
+      ${state.tripsGuest.length
+        ? state.tripsGuest.map(b => bookingRow(b, 'guest')).join('')
+        : `<div class="empty"><h3>No trips yet</h3><p>Pick a place and send the host a request.</p>
+           <button class="btn btn-primary" data-go-explore>Explore stays</button></div>`}
+    `;
+  }
+
+  if (state.tab === 'inbox') {
+    view.innerHTML = `
+      <div class="head"><div><h1>Requests</h1><p>Confirm or decline bookings on your places</p></div></div>
+      ${state.tripsOwner.length
+        ? state.tripsOwner.map(b => bookingRow(b, 'owner')).join('')
+        : `<div class="empty"><h3>No requests</h3><p>Bookings on your listings will show up here.</p></div>`}
+    `;
+  }
+
+  wire(view);
+}
+
+function wire(root) {
+  root.querySelectorAll('[data-book]').forEach(b => b.onclick = () => {
+    if (!requireAuth()) return;
+    bookingModal(state.listings.find(l => l.id == b.dataset.book));
+  });
+  root.querySelectorAll('[data-edit]').forEach(b => b.onclick = () =>
+    listingModal(state.listings.find(l => l.id == b.dataset.edit)));
+  root.querySelectorAll('[data-del]').forEach(b => b.onclick = () => deleteListing(b.dataset.del));
+  root.querySelectorAll('[data-new]').forEach(b => b.onclick = () => { if (requireAuth()) listingModal(); });
+  root.querySelectorAll('[data-confirm]').forEach(b => b.onclick = () => confirmBooking(b.dataset.confirm));
+  root.querySelectorAll('[data-reject]').forEach(b => b.onclick = () => rejectBooking(b.dataset.reject));
+  root.querySelectorAll('[data-cancel]').forEach(b => b.onclick = () => cancelBooking(b.dataset.cancel));
+  root.querySelectorAll('[data-go-explore]').forEach(b => b.onclick = () => { state.tab = 'explore'; render(); });
+}
+
+/* ============ start ============ */
+(async () => {
+  await loadMe();
+  await refresh();
+})();
+</script>
+</body>
+</html>
