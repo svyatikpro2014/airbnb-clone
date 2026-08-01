@@ -556,7 +556,6 @@ function listingCard(l) {
 function bookingRow(b, role) {
   const canCancel = role === 'guest' && (b.status === 'pending' || b.status === 'confirmed');
   const canDecide = role === 'owner' && b.status === 'pending';
-  const who = role === 'owner' ? 'Guest — ' + esc(b.guest.nick) : 'Hosted by ' + esc(b.listing.name);
   const n = nights(b.check_in, b.check_out);
   return `
     <div class="row">
@@ -564,7 +563,7 @@ function bookingRow(b, role) {
       <div class="info">
         <h3>${esc(b.listing.name)}</h3>
         <div class="meta">${fmtDate(b.check_in)} – ${fmtDate(b.check_out)} · ${n} night${n > 1 ? 's' : ''} · ${money(b.listing.price * n)}</div>
-        <div class="meta">${who}</div>
+        ${role === 'owner' ? `<div class="meta">Guest — ${esc(b.guest.nick)}</div>` : ''}
       </div>
       <div class="side">
         <span class="pill ${b.status}">${STATUS_EN[b.status] || b.status}</span>
@@ -576,6 +575,7 @@ function bookingRow(b, role) {
       </div>
     </div>`;
 }
+
 
 function render() {
   renderAuthArea();
