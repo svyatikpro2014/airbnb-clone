@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, update
 from database import get_session
-from models import UserModel, ListingModel
+from models import UserModel, ListingModel, BookingModel
 from schemas import ListingAddSchema, ListingResponceSchema, ListingUpdateSchema
 from routers.auth import get_user
 from sqlalchemy.orm import selectinload
@@ -56,5 +56,10 @@ async def delete_listing(listing_id:int, current_user = Depends(get_user), sessi
     if obj.owner.id != current_user.id:
         raise HTTPException(detail="Permission denied", status_code=403)
     
+    active_bookings = await session.execute(select(BookingModel).where(BookingModel.listing_id == listing_id, BookingModel.status.in_(["pending", "confirmed"])))
+    
+    if active_bookings.scalars().first():
+        raise HTTPException(status_code=400, detail="Cannot delete listing with active bookings")
+
     await session.delete(obj)
     await session.commit()
