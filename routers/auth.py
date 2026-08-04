@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from database import get_session
 from models import UserModel
-from schemas import UserAddSchema, UserResponseSchema
+from schemas import UserAddSchema, UserResponseSchema, UserLoginSchema
 from passlib.context import CryptContext
 from authx import AuthX, AuthXConfig, TokenPayload 
 import os
@@ -51,7 +51,7 @@ async def register(user:UserAddSchema, session:AsyncSession = Depends(get_sessio
 
 
 @router.post("/login")
-async def login(user:UserAddSchema, session:AsyncSession = Depends(get_session)):
+async def login(user:UserLoginSchema, session:AsyncSession = Depends(get_session)):
     exist_check = await session.execute(select(UserModel).where(UserModel.email == user.email))
     existing_user = exist_check.scalar_one_or_none()
 
@@ -62,7 +62,7 @@ async def login(user:UserAddSchema, session:AsyncSession = Depends(get_session))
         raise HTTPException(status_code=401, detail="Wrong password")
     
     token = security.create_access_token(uid=str(existing_user.id))
-    return {"access token": token, "type": "bearer"}
+    return {"access_token": token, "type": "bearer"}
 
 
 

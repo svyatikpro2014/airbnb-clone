@@ -9,6 +9,11 @@ class UserAddSchema(BaseModel):
     password: SecretStr = Field(min_length=5, max_length=72)
 
 
+class UserLoginSchema(BaseModel):
+    email: EmailStr
+    password: SecretStr = Field(min_length=5, max_length=72)
+
+
 class UserResponseSchema(BaseModel):
     id: int
     email: str
