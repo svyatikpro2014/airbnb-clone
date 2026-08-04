@@ -39,6 +39,7 @@ class ListingResponceSchema(BaseModel):
     description: str = Field(min_length=1, max_length=200) 
     price: float = Field(gt=0)
     owner: UserShortSchema
+    image_url: str | None = None
     model_config = ConfigDict(from_attributes=True)
 
 

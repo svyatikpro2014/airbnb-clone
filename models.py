@@ -2,6 +2,7 @@ from sqlalchemy import ForeignKey, Date
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from database import Base
 from datetime import date
+from typing import Optional
 
 
 class UserModel(Base):
@@ -22,6 +23,7 @@ class ListingModel(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     owner: Mapped["UserModel"] = relationship(back_populates="listings")
     bookings: Mapped[list["BookingModel"]] = relationship(back_populates="listing")
+    image_url: Mapped[Optional[str]] = mapped_column()
 
 
 class BookingModel(Base):
