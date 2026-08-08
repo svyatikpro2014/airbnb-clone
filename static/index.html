@@ -15,6 +15,9 @@
     --bg:#FFFFFF;
     --shadow:0 6px 20px rgba(0,0,0,.08);
     --radius:12px;
+    --green:#E7F7EC;
+    --green-ink:#1B7A3E;
+    --gray:#F0F0F0;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   body{
@@ -81,6 +84,7 @@
   .grid{display:grid;gap:28px 20px;grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
 
   /* ---------- listing card ---------- */
+  .card{cursor:pointer}
   .card .photo{
     aspect-ratio:20/19;border-radius:var(--radius);overflow:hidden;
     position:relative;margin-bottom:12px;background-size:cover;background-position:center;
@@ -129,12 +133,13 @@
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
 
   /* ---------- modal ---------- */
-  .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);display:grid;place-items:center;padding:20px;z-index:100}
+  .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);display:grid;place-items:center;padding:20px;z-index:100;overflow-y:auto}
   .modal{
     background:#fff;border-radius:16px;box-shadow:var(--shadow);
     width:100%;max-width:440px;max-height:90vh;overflow-y:auto;
     animation:pop .18s ease-out;
   }
+  .modal.wide{max-width:600px}
   @keyframes pop{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
   .modal .m-head{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--line-soft)}
   .modal .m-head h2{font-size:16px;font-weight:600;flex:1;text-align:center}
@@ -173,6 +178,38 @@
     position:absolute;right:8px;bottom:8px;background:rgba(0,0,0,.6);color:#fff;
     border-radius:999px;padding:5px 12px;font-size:12px;font-weight:600;pointer-events:none;
   }
+
+  /* ---------- listing detail ---------- */
+  .detail-photo{aspect-ratio:16/9;border-radius:var(--radius);overflow:hidden;position:relative;margin-bottom:16px}
+  .detail-photo i{position:absolute;inset:0}
+  .detail-photo img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  .detail-title{font-size:20px;font-weight:700;margin-bottom:4px}
+  .detail-owner{font-size:14px;color:var(--muted);margin-bottom:14px}
+  .detail-desc{font-size:14px;line-height:1.5;color:var(--ink);margin-bottom:22px}
+  .detail-price{font-size:16px;font-weight:700;margin-bottom:14px}
+  .detail-price span{font-weight:400;color:var(--muted);font-size:14px}
+
+  /* ---------- calendar ---------- */
+  .cal{border:1px solid var(--line-soft);border-radius:var(--radius);padding:16px;margin-bottom:16px}
+  .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+  .cal-head strong{font-size:14px;font-weight:600}
+  .cal-nav{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:14px}
+  .cal-nav:hover{background:#F1F1F1}
+  .cal-nav:disabled{opacity:.3;cursor:not-allowed}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;text-align:center}
+  .cal-dow{font-size:11px;color:var(--muted);font-weight:600;padding:4px 0}
+  .cal-day{
+    aspect-ratio:1;display:grid;place-items:center;border-radius:8px;
+    font-size:13px;cursor:pointer;user-select:none;background:var(--green);color:var(--green-ink);
+  }
+  .cal-day.blank{background:none;cursor:default}
+  .cal-day.past{background:none;color:#CCC;cursor:not-allowed}
+  .cal-day.booked{background:var(--gray);color:#B0B0B0;cursor:not-allowed;text-decoration:line-through}
+  .cal-day.sel{background:var(--ink);color:#fff}
+  .cal-day.range{background:#FFE1E7;color:var(--coral-dark)}
+  .cal-legend{display:flex;gap:14px;margin-top:12px;font-size:12px;color:var(--muted)}
+  .cal-legend span{display:inline-flex;align-items:center;gap:5px}
+  .cal-legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
 
   /* ---------- toast ---------- */
   #toasts{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:200;display:flex;flex-direction:column;gap:8px;align-items:center}
@@ -297,30 +334,45 @@ function nights(a, b) {
 
 const STATUS_EN = {pending:'Awaiting host', confirmed:'Confirmed', rejected:'Declined', cancelled:'Cancelled'};
 
-/* ============ auth ============ */
-async function loadMe() {
-  if (!state.token) { state.me = null; return; }
-  try { state.me = await api('/auth/me'); }
-  catch { state.me = null; }
+/* ============ date utils ============ */
+function toISO(d) {
+  return d.toISOString().slice(0, 10);
 }
+function addDays(iso, n) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(y, m - 1, d + n);   
+  const yy = dt.getFullYear();
+  const mm = String(dt.getMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;              
+}
+function isBefore(a, b) { return a < b; }
 
-function logout(silent) {
-  state.token = null; state.me = null;
-  localStorage.removeItem('stay_token');
-  if (!silent) toast('Signed out');
-  state.tab = 'explore';
-  render();
+/* ============ availability ============ */
+async function fetchBookedSet(listingId) {
+  const periods = await api(`/listings/${listingId}/availability`, {auth:false});
+  const booked = new Set();
+  for (const p of periods) {
+    // mark every night from check_in up to (not including) check_out as unavailable —
+    // matches the backend rule: a check-out day can be someone else's check-in day
+    let cur = p.check_in;
+    while (isBefore(cur, p.check_out)) {
+      booked.add(cur);
+      cur = addDays(cur, 1);
+    }
+  }
+  return booked;
 }
 
 /* ============ modal ============ */
 function closeModal() { document.getElementById('modalHost').innerHTML = ''; }
 
-function openModal(title, bodyHTML, footHTML) {
+function openModal(title, bodyHTML, footHTML, wide=false) {
   const host = document.getElementById('modalHost');
   host.innerHTML = '';
   const back = $(`
     <div class="backdrop">
-      <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal ${wide ? 'wide' : ''}" role="dialog" aria-modal="true">
         <div class="m-head">
           <button class="x" data-close aria-label="Close">✕</button>
           <h2>${esc(title)}</h2>
@@ -379,7 +431,6 @@ function authModal(mode = 'login') {
       if (!isLogin) {
         await api('/auth/registration', {method:'POST', auth:false, body:{nick, email, password}});
       }
-      // login only needs email + password — no nick in the payload
       const res = await api('/auth/login', {method:'POST', auth:false, body:{email, password}});
       const token = res['access token'] || res['access_token'] || res.token;
       if (!token) throw new Error('The server did not return a token');
@@ -401,10 +452,25 @@ function requireAuth() {
   return true;
 }
 
-/* ============ listing modal ============ */
+/* ============ auth ============ */
+async function loadMe() {
+  if (!state.token) { state.me = null; return; }
+  try { state.me = await api('/auth/me'); }
+  catch { state.me = null; }
+}
+
+function logout(silent) {
+  state.token = null; state.me = null;
+  localStorage.removeItem('stay_token');
+  if (!silent) toast('Signed out');
+  state.tab = 'explore';
+  render();
+}
+
+/* ============ listing modal (create/edit) ============ */
 function listingModal(existing) {
   const edit = !!existing;
-  let pendingPhoto = null; // File object picked before the listing exists yet
+  let pendingPhoto = null;
 
   const m = openModal(edit ? 'Edit listing' : 'New listing', `
     <div class="photo-picker" id="l-picker">
@@ -436,7 +502,6 @@ function listingModal(existing) {
     if (!file) return;
 
     if (edit) {
-      // listing already exists — upload right away
       const fd = new FormData();
       fd.append('photo', file);
       try {
@@ -444,7 +509,7 @@ function listingModal(existing) {
         toast('Photo updated', 'good');
         await refresh();
         const fresh = state.listings.find(l => l.id === existing.id);
-        if (fresh) { existing = fresh; }
+        if (fresh) existing = fresh;
         picker.querySelectorAll('img').forEach(i => i.remove());
         picker.querySelector('.hint')?.remove();
         picker.insertAdjacentHTML('afterbegin', `<img src="${esc(photoUrl(existing.image_url))}" alt="">`);
@@ -453,7 +518,6 @@ function listingModal(existing) {
         toast(e.message, 'bad');
       }
     } else {
-      // listing doesn't exist yet — hold onto the file, preview it, upload after create
       pendingPhoto = file;
       const reader = new FileReader();
       reader.onload = () => {
@@ -500,43 +564,147 @@ function listingModal(existing) {
   };
 }
 
-/* ============ booking modal ============ */
-function bookingModal(listing) {
-  const today = new Date().toISOString().slice(0, 10);
-  const m = openModal(listing.name, `
-    <div class="two">
-      <div class="field">
-        <label for="b-in">Check in</label>
-        <input id="b-in" type="date" min="${today}">
-      </div>
-      <div class="field">
-        <label for="b-out">Check out</label>
-        <input id="b-out" type="date" min="${today}">
-      </div>
+/* ============ calendar widget ============ */
+// renders a month grid into `host`; calls onPick(iso) when an available day is clicked
+function renderCalendar(host, viewDate, bookedSet, range, onPick, onNav) {
+  const today = toISO(new Date());
+  const year = viewDate.getFullYear();
+  const month = viewDate.getMonth();
+  const first = new Date(year, month, 1);
+  const startWeekday = first.getDay(); // 0=Sun
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const monthLabel = first.toLocaleDateString('en-US', {month:'long', year:'numeric'});
+
+  const inPastMonth = (year < today.slice(0,4) || (year == today.slice(0,4) && month < Number(today.slice(5,7)) - 1));
+
+  let cells = '';
+  for (let i = 0; i < startWeekday; i++) cells += `<div class="cal-day blank"></div>`;
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const iso = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const isPast = iso < today;
+    const isBooked = bookedSet.has(iso);
+    let cls = 'cal-day';
+    if (isPast) cls += ' past';
+    else if (isBooked) cls += ' booked';
+
+    if (range.start && iso === range.start) cls += ' sel';
+    if (range.end && iso === range.end) cls += ' sel';
+    if (range.start && range.end && iso > range.start && iso < range.end) cls += ' range';
+
+    const clickable = !isPast && !isBooked;
+    cells += `<div class="${cls}" ${clickable ? `data-day="${iso}"` : ''}>${d}</div>`;
+  }
+
+  host.innerHTML = `
+    <div class="cal-head">
+      <button class="cal-nav" data-nav="-1" ${inPastMonth ? 'disabled' : ''}>‹</button>
+      <strong>${monthLabel}</strong>
+      <button class="cal-nav" data-nav="1">›</button>
     </div>
-    <div class="summary" id="b-sum"><span>Pick your dates</span><strong>—</strong></div>
-  `, `<button class="btn btn-primary full" id="b-go">Request to book</button>`);
+    <div class="cal-grid">
+      <div class="cal-dow">S</div><div class="cal-dow">M</div><div class="cal-dow">T</div>
+      <div class="cal-dow">W</div><div class="cal-dow">T</div><div class="cal-dow">F</div><div class="cal-dow">S</div>
+      ${cells}
+    </div>
+    <div class="cal-legend">
+      <span><i style="background:var(--green)"></i>Available</span>
+      <span><i style="background:var(--gray)"></i>Booked</span>
+      <span><i style="background:var(--ink)"></i>Selected</span>
+    </div>`;
 
-  const inp = m.querySelector('#b-in'), out = m.querySelector('#b-out'), sum = m.querySelector('#b-sum');
+  host.querySelectorAll('[data-day]').forEach(el => el.onclick = () => onPick(el.dataset.day));
+  host.querySelectorAll('[data-nav]').forEach(el => el.onclick = () => onNav(Number(el.dataset.nav)));
+}
 
-  const recalc = () => {
-    const n = (inp.value && out.value) ? nights(inp.value, out.value) : 0;
-    sum.innerHTML = n > 0
-      ? `<span>${money(listing.price)} × ${n} night${n > 1 ? 's' : ''}</span><strong>${money(listing.price * n)}</strong>`
-      : `<span>Pick your dates</span><strong>—</strong>`;
+/* ============ listing detail modal ============ */
+async function listingDetailModal(listing) {
+  const mine = state.me && listing.owner.id === state.me.id;
+  const m = openModal(listing.name, `
+    <div class="detail-photo">${coverHTML(listing)}</div>
+    <div class="detail-title">${esc(listing.name)}</div>
+    <div class="detail-owner">${mine ? 'Your listing' : 'Hosted by ' + esc(listing.owner.nick)}</div>
+    <p class="detail-desc">${esc(listing.description)}</p>
+    <div class="detail-price">${money(listing.price)} <span>/ night</span></div>
+    <div class="cal" id="d-cal"><div class="hint" style="text-align:center;padding:20px;color:var(--muted)">Loading availability…</div></div>
+    <div class="summary" id="d-sum"><span>Pick check-in and check-out</span><strong>—</strong></div>
+  `, mine ? '' : `<button class="btn btn-primary full" id="d-go" disabled>Select dates first</button>`, true);
+
+  if (mine) return; // owners view their own listing without a booking flow
+
+  const calHost = m.querySelector('#d-cal');
+  const sum = m.querySelector('#d-sum');
+  const go = m.querySelector('#d-go');
+
+  let viewDate = new Date();
+  viewDate.setDate(1);
+  const range = {start: null, end: null};
+  let bookedSet = new Set();
+
+  const updateSummary = () => {
+    if (range.start && range.end) {
+      const n = nights(range.start, range.end);
+      sum.innerHTML = `<span>${money(listing.price)} × ${n} night${n > 1 ? 's' : ''}</span><strong>${money(listing.price * n)}</strong>`;
+      go.disabled = false;
+      go.textContent = 'Request to book';
+    } else if (range.start) {
+      sum.innerHTML = `<span>Check-in ${fmtDate(range.start)} — pick check-out</span><strong>—</strong>`;
+      go.disabled = true;
+      go.textContent = 'Select dates first';
+    } else {
+      sum.innerHTML = `<span>Pick check-in and check-out</span><strong>—</strong>`;
+      go.disabled = true;
+      go.textContent = 'Select dates first';
+    }
   };
-  inp.oninput = () => { out.min = inp.value || today; recalc(); };
-  out.oninput = recalc;
 
-  const go = m.querySelector('#b-go');
+  const rangeHasBookedDay = (start, end) => {
+    let cur = start;
+    while (isBefore(cur, end)) {
+      if (bookedSet.has(cur)) return true;
+      cur = addDays(cur, 1);
+    }
+    return false;
+  };
+
+  const draw = () => renderCalendar(calHost, viewDate, bookedSet, range, onPick, onNav);
+
+  function onPick(iso) {
+    if (!range.start || (range.start && range.end)) {
+      range.start = iso; range.end = null;
+    } else if (iso <= range.start) {
+      range.start = iso; range.end = null;
+    } else if (rangeHasBookedDay(range.start, iso)) {
+      toast('That range crosses a booked date — pick a shorter stay', 'bad');
+      range.start = iso; range.end = null;
+    } else {
+      range.end = iso;
+    }
+    updateSummary();
+    draw();
+  }
+
+  function onNav(delta) {
+    viewDate = new Date(viewDate.getFullYear(), viewDate.getMonth() + delta, 1);
+    draw();
+  }
+
+  try {
+    bookedSet = await fetchBookedSet(listing.id);
+  } catch (e) {
+    toast('Could not load availability', 'bad');
+  }
+  draw();
+  updateSummary();
+
   go.onclick = async () => {
-    if (!inp.value || !out.value) return toast('Pick a check-in and check-out date', 'bad');
-    if (nights(inp.value, out.value) < 1) return toast('Check-out must be after check-in', 'bad');
+    if (!requireAuth()) return;
+    if (!range.start || !range.end) return;
 
     go.disabled = true; go.textContent = 'One moment…';
     try {
       await api('/bookings/', {method:'POST', body:{
-        listing_id: listing.id, check_in: inp.value, check_out: out.value,
+        listing_id: listing.id, check_in: range.start, check_out: range.end,
       }});
       closeModal();
       toast('Request sent — waiting on the host', 'good');
@@ -722,9 +890,15 @@ function render() {
 }
 
 function wire(root) {
+  // opening the detail modal: click anywhere on the card except its action buttons
+  root.querySelectorAll('[data-listing]').forEach(card => card.onclick = (e) => {
+    if (e.target.closest('button')) return;
+    const listing = state.listings.find(l => l.id == card.dataset.listing);
+    if (listing) listingDetailModal(listing);
+  });
   root.querySelectorAll('[data-book]').forEach(b => b.onclick = () => {
-    if (!requireAuth()) return;
-    bookingModal(state.listings.find(l => l.id == b.dataset.book));
+    const listing = state.listings.find(l => l.id == b.dataset.book);
+    if (listing) listingDetailModal(listing);
   });
   root.querySelectorAll('[data-edit]').forEach(b => b.onclick = () =>
     listingModal(state.listings.find(l => l.id == b.dataset.edit)));

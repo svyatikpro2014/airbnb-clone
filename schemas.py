@@ -71,3 +71,8 @@ class BookingResponceSchema(BaseModel):
     guest: UserShortSchema
     listing: ListingShortSchema
     model_config = ConfigDict(from_attributes=True)
+
+
+class Listing_availability_DTO(BaseModel):
+    check_in: date
+    check_out: date

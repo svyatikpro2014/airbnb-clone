@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, update
 from database import get_session
 from models import UserModel, ListingModel, BookingModel
-from schemas import ListingAddSchema, ListingResponceSchema, ListingUpdateSchema
+from schemas import ListingAddSchema, ListingResponceSchema, ListingUpdateSchema, Listing_availability_DTO
 from routers.auth import get_user
 from sqlalchemy.orm import selectinload
 import os
@@ -97,3 +97,10 @@ async def upload_photo(
     await session.commit()
     await session.refresh(obj)
     return obj
+
+
+@router.get("/{listing_id}/availability", response_model=list[Listing_availability_DTO])
+async def availability_check (listing_id:int, session: AsyncSession = Depends(get_session)):
+    query = await session.execute(select(BookingModel.check_in, BookingModel.check_out).where(BookingModel.listing_id == listing_id, BookingModel.status == "confirmed"))
+    res = query.all()
+    return res
