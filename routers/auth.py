@@ -2,12 +2,15 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from database import get_session
-from models import UserModel
-from schemas import UserAddSchema, UserResponseSchema, UserLoginSchema
+from models import UserModel, RefreshTokenModel
+from schemas import UserAddSchema, UserResponseSchema, UserLoginSchema, RefreshTokenSchema
 from passlib.context import CryptContext
 from authx import AuthX, AuthXConfig, TokenPayload 
 import os
 from dotenv import load_dotenv
+from datetime import datetime, timedelta, timezone
+from hashlib import sha256
+from sqlalchemy.orm import joinedload
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -33,6 +36,10 @@ def verify_password(password:str, hashed_password:str)->bool:
     return pwd_context.verify(password, hashed_password)
 
 
+def hash_token(token: str) -> str:
+    return sha256(token.encode()).hexdigest()
+
+
 @router.post("/registration", response_model=UserResponseSchema)
 async def register(user:UserAddSchema, session:AsyncSession = Depends(get_session)):
     exist_check = await session.execute(select(UserModel).where(UserModel.email == user.email))
@@ -56,14 +63,48 @@ async def login(user:UserLoginSchema, session:AsyncSession = Depends(get_session
     existing_user = exist_check.scalar_one_or_none()
 
     if not existing_user:
-        raise HTTPException(detail="user does not exist", status_code=400)
+        raise HTTPException(detail="Invalid credentials", status_code=401)
     
     if not verify_password(user.password.get_secret_value(), existing_user.password):
-        raise HTTPException(status_code=401, detail="Wrong password")
+        raise HTTPException(status_code=401, detail="Invalid credentials")
     
-    token = security.create_access_token(uid=str(existing_user.id))
-    return {"access_token": token, "type": "bearer"}
+    access_token = security.create_access_token(uid=str(existing_user.id))
+    refresh_token = security.create_refresh_token(uid=str(existing_user.id))
+    db_refresh_token = hash_token(refresh_token)
 
+    r_token = RefreshTokenModel(hashed_token= db_refresh_token, expiry= datetime.now(timezone.utc) + timedelta(days=20), user = existing_user)
+    session.add(r_token)
+    await session.commit()
+    return {"access_token": access_token, "refresh_token": refresh_token, "type": "bearer"}
+
+
+@router.post("/refresh")
+async def refresh(raw_token: RefreshTokenSchema, session: AsyncSession = Depends(get_session)):
+    hashed = hash_token(raw_token.refresh_token)
+    query = await session.execute(select(RefreshTokenModel).where (RefreshTokenModel.hashed_token == hashed))
+    r_token = query.scalar_one_or_none()
+
+    if r_token and not r_token.revoked and r_token.expiry > datetime.now(timezone.utc):
+        access_token = security.create_access_token(uid=str(r_token.user_id))
+    else:
+        raise HTTPException(status_code= 401, detail="Session expired")
+
+    return {"access_token": access_token}
+
+
+@router.post("/logout")
+async def logout(raw_token: RefreshTokenSchema, session: AsyncSession = Depends(get_session)):
+    hashed = hash_token(raw_token.refresh_token)
+    query = await session.execute(select(RefreshTokenModel).where(RefreshTokenModel.hashed_token == hashed))
+    r_token = query.scalar_one_or_none()
+
+    if not r_token:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    r_token.revoked = True
+    await session.commit()
+
+    return {"msg": "Logged out"}
 
 
 async def get_user(payload: TokenPayload = Depends(security.access_token_required), session: AsyncSession = Depends(get_session)):
