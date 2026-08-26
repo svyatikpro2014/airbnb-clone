@@ -358,8 +358,9 @@ async function api(path, opts = {}) {
   const {auth = true} = opts;
   let res = await rawFetch(path, opts);
 
-  // access истёк — один раз пробуем обновить и повторить запрос
-  if (res.status === 401 && auth && state.refreshToken) {
+  const expired = res.status === 401 || (res.status === 422 && await looksExpired(res.clone()));
+
+  if (expired && auth && state.refreshToken) {
     const ok = await tryRefresh();
     if (ok) res = await rawFetch(path, opts);
     else logout(true);
@@ -375,6 +376,13 @@ async function api(path, opts = {}) {
     throw new Error(readError(data, res.status));
   }
   return data;
+}
+
+async function looksExpired(res) {
+  try {
+    const data = await res.json();
+    return data?.error_type === 'TokenExpiredError';
+  } catch { return false; }
 }
 
 function readError(data, status) {
