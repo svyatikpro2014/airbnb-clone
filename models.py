@@ -1,4 +1,4 @@
-from sqlalchemy import ForeignKey, Date
+from sqlalchemy import ForeignKey, Date, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from database import Base
 from datetime import date, datetime, timezone
@@ -44,8 +44,8 @@ class RefreshTokenModel(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete= "CASCADE"), index=True)
     hashed_token: Mapped[str] = mapped_column(unique=True)
-    expiry: Mapped[datetime] = mapped_column()
+    expiry: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     revoked: Mapped[bool] = mapped_column(default=False)
-    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     user: Mapped["UserModel"] = relationship(back_populates="refresh_tokens")

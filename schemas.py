@@ -76,3 +76,7 @@ class BookingResponceSchema(BaseModel):
 class Listing_availability_DTO(BaseModel):
     check_in: date
     check_out: date
+
+
+class RefreshTokenSchema(BaseModel):
+    refresh_token: str
