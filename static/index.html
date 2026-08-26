@@ -290,6 +290,7 @@ const API = location.port === '8000' ? '' : 'http://127.0.0.1:8000';
 
 const state = {
   token: localStorage.getItem('stay_token') || null,
+  refreshToken: localStorage.getItem('stay_refresh') || null,
   me: null,
   tab: 'explore',
   listings: [],
@@ -313,15 +314,56 @@ applyTheme(localStorage.getItem('stay_theme') || 'light');
 document.getElementById('themeToggle').onclick = toggleTheme;
 
 /* ============ api ============ */
-async function api(path, {method='GET', body, auth=true, formData=false} = {}) {
+let refreshPromise = null;
+
+// single-flight: если рефреш уже идёт, все параллельные запросы ждут один и тот же
+async function tryRefresh() {
+  if (refreshPromise) return refreshPromise;
+  if (!state.refreshToken) return false;
+
+  refreshPromise = (async () => {
+    try {
+      const res = await fetch(API + '/auth/refresh', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({refresh_token: state.refreshToken}),
+      });
+      if (!res.ok) return false;
+      const data = await res.json();
+      state.token = data.access_token;
+      localStorage.setItem('stay_token', data.access_token);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
+}
+
+// сырой запрос без ретрая
+async function rawFetch(path, {method='GET', body, auth=true, formData=false} = {}) {
   const headers = {};
   if (body && !formData) headers['Content-Type'] = 'application/json';
   if (auth && state.token) headers['Authorization'] = 'Bearer ' + state.token;
-
-  const res = await fetch(API + path, {
+  return fetch(API + path, {
     method, headers,
     body: formData ? body : (body ? JSON.stringify(body) : undefined),
   });
+}
+
+async function api(path, opts = {}) {
+  const {auth = true} = opts;
+  let res = await rawFetch(path, opts);
+
+  // access истёк — один раз пробуем обновить и повторить запрос
+  if (res.status === 401 && auth && state.refreshToken) {
+    const ok = await tryRefresh();
+    if (ok) res = await rawFetch(path, opts);
+    else logout(true);
+  }
 
   if (res.status === 204) return null;
   const text = await res.text();
@@ -413,8 +455,20 @@ async function loadMe() {
   try { state.me = await api('/auth/me'); } catch { state.me = null; }
 }
 function logout(silent) {
-  state.token = null; state.me = null;
+  // best-effort: гасим refresh в БД, только если это ручной логаут
+  // (при силент-логауте из-за 401 токен и так уже невалиден — не зацикливаемся)
+  if (!silent && state.refreshToken) {
+    fetch(API + '/auth/logout', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({refresh_token: state.refreshToken}),
+    }).catch(() => {});
+  }
+  state.token = null;
+  state.refreshToken = null;
+  state.me = null;
   localStorage.removeItem('stay_token');
+  localStorage.removeItem('stay_refresh');
   if (!silent) toast('Signed out');
   go({name:'home', listingId:null});
 }
@@ -474,10 +528,12 @@ function authModal(mode = 'login') {
     try {
       if (!isLogin) await api('/auth/registration', {method:'POST', auth:false, body:{nick, email, password}});
       const res = await api('/auth/login', {method:'POST', auth:false, body:{email, password}});
-      const token = res['access token'] || res['access_token'] || res.token;
+      const token = res.access_token || res.token;
       if (!token) throw new Error('The server did not return a token');
       state.token = token;
+      state.refreshToken = res.refresh_token || null;
       localStorage.setItem('stay_token', token);
+      if (state.refreshToken) localStorage.setItem('stay_refresh', state.refreshToken);
       await loadMe();
       closeModal();
       toast(isLogin ? `Welcome back, ${state.me?.nick || ''}` : 'Account created', 'good');
