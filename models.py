@@ -1,7 +1,7 @@
 from sqlalchemy import ForeignKey, Date
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from database import Base
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Optional
 
 
@@ -13,6 +13,7 @@ class UserModel(Base):
     password: Mapped[str] = mapped_column()
     listings: Mapped[list["ListingModel"]] = relationship(back_populates="owner")
     bookings: Mapped[list["BookingModel"]] = relationship(back_populates="guest")
+    refresh_tokens: Mapped[list["RefreshTokenModel"]] = relationship(back_populates="user")
 
 class ListingModel(Base):
     __tablename__ = "listings"
@@ -36,3 +37,15 @@ class BookingModel(Base):
     status: Mapped[str] = mapped_column()
     guest: Mapped["UserModel"] = relationship(back_populates="bookings")
     listing: Mapped["ListingModel"] = relationship(back_populates="bookings")
+
+
+class RefreshTokenModel(Base):
+    __tablename__ = "refresh_tokens"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete= "CASCADE"), index=True)
+    hashed_token: Mapped[str] = mapped_column(unique=True)
+    expiry: Mapped[datetime] = mapped_column()
+    revoked: Mapped[bool] = mapped_column(default=False)
+    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
+
+    user: Mapped["UserModel"] = relationship(back_populates="refresh_tokens")
