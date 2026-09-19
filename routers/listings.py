@@ -40,7 +40,7 @@ async def update_listing(listing_update: ListingUpdateSchema, listing_id:int, cu
     if obj.owner.id != current_user.id:
         raise HTTPException(detail="Permission denied", status_code=403)
     
-    for key, value in listing_update.model_dump().items():
+    for key, value in listing_update.model_dump(exclude_unset=True).items():
         setattr(obj, key, value)
 
     await session.commit()
